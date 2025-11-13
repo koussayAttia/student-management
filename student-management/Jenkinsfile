@@ -35,7 +35,9 @@ pipeline {
         stage('Archive du livrable') {
             steps {
                 echo "Archivage du jar généré..."
-                archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
+                dir('student-management') {
+                    archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
+                }
             }
         }
     }
