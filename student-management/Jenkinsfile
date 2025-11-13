@@ -1,0 +1,48 @@
+pipeline {
+    agent any
+
+    tools {
+        jdk 'JDK17'         
+        maven 'Maven3'      
+    }
+
+    environment {
+        GIT_CREDENTIALS_ID = '14409463' 
+        GIT_BRANCH         = 'main'             
+        GIT_URL            = 'https://github.com/koussayAttia/student-management.git'
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                echo "Récupération du projet depuis GitHub (dépôt privé)..."
+                git branch: env.GIT_BRANCH,
+                    url: env.GIT_URL,
+                    credentialsId: env.GIT_CREDENTIALS_ID
+            }
+        }
+
+        stage('Build (clean & package, sans tests)') {
+            steps {
+                echo "Build Maven avec skip des tests..."
+                sh 'mvn clean package -DskipTests'
+            }
+        }
+
+        stage('Archive du livrable') {
+            steps {
+                echo "Archivage du jar généré..."
+                archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
+            }
+        }
+    }
+
+    post {
+        success {
+            echo 'Build réussi'
+        }
+        failure {
+            echo 'Build échoué'
+        }
+    }
+}
