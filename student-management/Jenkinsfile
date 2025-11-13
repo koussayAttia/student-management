@@ -25,6 +25,7 @@ pipeline {
         stage('Build (clean & package, sans tests)') {
             steps {
                 echo "Build Maven avec skip des tests..."
+                dir('student-management') 
                 sh 'mvn clean package -DskipTests'
             }
         }
