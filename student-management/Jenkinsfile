@@ -2,13 +2,13 @@ pipeline {
     agent any
 
     tools {
-        jdk 'JAVA_Home'         
-        maven 'M2_HOME'      
+        jdk 'JAVA_Home'     // noms EXACTS dans Global Tool Configuration
+        maven 'M2_HOME'
     }
 
     environment {
-        GIT_CREDENTIALS_ID = '14409463' 
-        GIT_BRANCH         = 'main'             
+        GIT_CREDENTIALS_ID = '14409463'  // ton ID de credentials
+        GIT_BRANCH         = 'main'
         GIT_URL            = 'https://github.com/koussayAttia/student-management.git'
     }
 
@@ -26,10 +26,8 @@ pipeline {
             steps {
                 echo "Build Maven avec skip des tests..."
                 dir('student-management') {
-                     sh 'mvn clean package -DskipTests'
-                    
+                    sh 'mvn clean package -DskipTests'
                 }
-
             }
         }
 
@@ -45,7 +43,7 @@ pipeline {
 
     post {
         success {
-            echo 'Build réussi'
+            echo 'Build réussi 🎉'
         }
         failure {
             echo 'Build échoué'
