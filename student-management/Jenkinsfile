@@ -7,9 +7,13 @@ pipeline {
     }
 
     environment {
-        GIT_CREDENTIALS_ID = '14409463'  // ton ID de credentials
-        GIT_BRANCH         = 'main'
-        GIT_URL            = 'https://github.com/koussayAttia/student-management.git'
+        GIT_CREDENTIALS_ID      = '14409463'  // ID de tes credentials GitHub
+        GIT_BRANCH              = 'main'
+        GIT_URL                 = 'https://github.com/koussayAttia/student-management.git'
+
+        // À ADAPTER selon ton compte Docker Hub
+        DOCKERHUB_REPO          = 'koussayattia/student-management'   // ex: username/nom-image
+        DOCKERHUB_CREDENTIALS_ID = 'dockerhub'                        // ID des credentials Docker Hub dans Jenkins
     }
 
     stages {
@@ -25,8 +29,29 @@ pipeline {
         stage('Build (clean & package, sans tests)') {
             steps {
                 echo "Build Maven avec skip des tests..."
-                dir('student-management') {
+                dir('student-management') {   // garde ça si ton pom.xml est bien dans ce dossier
                     sh 'mvn clean package -DskipTests'
+                }
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                echo "Build de l'image Docker..."
+                script {
+                    // On construit l'image avec un tag basé sur le numéro de build Jenkins
+                    dockerImage = docker.build("${env.DOCKERHUB_REPO}:${env.BUILD_NUMBER}")
+                }
+            }
+        }
+
+        stage('Push Docker Image to Docker Hub') {
+            steps {
+                echo "Push de l'image Docker sur Docker Hub..."
+                script {
+                    docker.withRegistry('https://registry.hub.docker.com', env.DOCKERHUB_CREDENTIALS_ID) {
+                        dockerImage.push()
+                    }
                 }
             }
         }
@@ -34,7 +59,7 @@ pipeline {
 
     post {
         success {
-            echo 'Build réussi 🎉'
+            echo 'Build réussi'
         }
         failure {
             echo 'Build échoué'
