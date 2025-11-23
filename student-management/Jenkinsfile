@@ -11,9 +11,8 @@ pipeline {
         GIT_BRANCH               = 'main'
         GIT_URL                  = 'https://github.com/koussayAttia/student-management.git'
 
-        // ⚠️ à adapter si ton repo Docker Hub a un autre nom
         DOCKERHUB_REPO           = 'koussayattia/student-management'
-        DOCKERHUB_CREDENTIALS_ID = 'dockerhub'
+        DOCKERHUB_CREDENTIALS_ID = '09897765'   // l'ID de tes credentials Docker Hub dans Jenkins
     }
 
     stages {
@@ -39,7 +38,6 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 echo "Build de l'image Docker..."
-                // on se place dans le dossier où il y a le Dockerfile
                 dir('student-management') {
                     sh 'docker build -t $DOCKERHUB_REPO:$BUILD_NUMBER .'
                 }
@@ -49,13 +47,18 @@ pipeline {
         stage('Push Docker Image to Docker Hub') {
             steps {
                 echo "Push de l'image Docker sur Docker Hub..."
-                withCredentials([usernamePassword(
-                    credentialsId: '09897765',
-                    usernameVariable: 'koussaybenattia',
-                    passwordVariable: 'dckr_pat_48J5vg0aAaqxHjmlw3o2w3igRSw'
-                )]) {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: env.DOCKERHUB_CREDENTIALS_ID,
+                        usernameVariable: 'DOCKERHUB_USER',
+                        passwordVariable: 'DOCKERHUB_PASS'
+                    )
+                ]) {
                     sh '''
+                        echo "Login à Docker Hub..."
                         echo "$DOCKERHUB_PASS" | docker login -u "$DOCKERHUB_USER" --password-stdin
+
+                        echo "Push de l'image..."
                         docker push $DOCKERHUB_REPO:$BUILD_NUMBER
                     '''
                 }
