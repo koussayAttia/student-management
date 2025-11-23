@@ -51,8 +51,8 @@ pipeline {
                 echo "Push de l'image Docker sur Docker Hub..."
                 withCredentials([usernamePassword(
                     credentialsId: env.DOCKERHUB_CREDENTIALS_ID,
-                    usernameVariable: 'DOCKERHUB_USER',
-                    passwordVariable: 'DOCKERHUB_PASS'
+                    usernameVariable: 'koussaybenattia',
+                    passwordVariable: 'dckr_pat_48J5vg0aAaqxHjmlw3o2w3igRSw'
                 )]) {
                     sh '''
                         echo "$DOCKERHUB_PASS" | docker login -u "$DOCKERHUB_USER" --password-stdin
