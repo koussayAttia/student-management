@@ -11,9 +11,8 @@ pipeline {
         GIT_BRANCH               = 'main'
         GIT_URL                  = 'https://github.com/koussayAttia/student-management.git'
 
-        // Doit correspondre exactement à ton repo Docker Hub
-        // Namespace = ton username Docker Hub : koussaybenattia
-        DOCKERHUB_REPO           = 'koussaybenattia/student-management'
+
+        DOCKERHUB_REPO           = 'koussayAttia/student-management'
         DOCKERHUB_CREDENTIALS_ID = '03373df4-ddd4-4b2f-bae3-f0f1748eb56a'
     }
 
@@ -77,4 +76,3 @@ pipeline {
         }
     }
 }
-
