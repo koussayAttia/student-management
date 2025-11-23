@@ -2,21 +2,22 @@ pipeline {
     agent any
 
     tools {
-        jdk 'JAVA_Home'     // noms EXACTS dans Global Tool Configuration
+        jdk 'JAVA_Home'
         maven 'M2_HOME'
     }
 
     environment {
-        GIT_CREDENTIALS_ID      = '14409463'  // ID de tes credentials GitHub
-        GIT_BRANCH              = 'main'
-        GIT_URL                 = 'https://github.com/koussayAttia/student-management.git'
+        GIT_CREDENTIALS_ID       = '14409463'
+        GIT_BRANCH               = 'main'
+        GIT_URL                  = 'https://github.com/koussayAttia/student-management.git'
 
-        // À ADAPTER selon ton compte Docker Hub
-        DOCKERHUB_REPO          = 'koussayattia/student-management'   // ex: username/nom-image
-        DOCKERHUB_CREDENTIALS_ID = 'dockerhub'                        // ID des credentials Docker Hub dans Jenkins
+        // ⚠️ à adapter si ton repo Docker Hub a un autre nom
+        DOCKERHUB_REPO           = 'koussayattia/student-management'
+        DOCKERHUB_CREDENTIALS_ID = 'dockerhub'
     }
 
     stages {
+
         stage('Checkout') {
             steps {
                 echo "Récupération du projet depuis GitHub (dépôt privé)..."
@@ -29,7 +30,7 @@ pipeline {
         stage('Build (clean & package, sans tests)') {
             steps {
                 echo "Build Maven avec skip des tests..."
-                dir('student-management') {   // garde ça si ton pom.xml est bien dans ce dossier
+                dir('student-management') {
                     sh 'mvn clean package -DskipTests'
                 }
             }
@@ -38,9 +39,9 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 echo "Build de l'image Docker..."
-                script {
-                    // On construit l'image avec un tag basé sur le numéro de build Jenkins
-                    dockerImage = docker.build("${env.DOCKERHUB_REPO}:${env.BUILD_NUMBER}")
+                // on se place dans le dossier où il y a le Dockerfile
+                dir('student-management') {
+                    sh 'docker build -t $DOCKERHUB_REPO:$BUILD_NUMBER .'
                 }
             }
         }
@@ -48,10 +49,15 @@ pipeline {
         stage('Push Docker Image to Docker Hub') {
             steps {
                 echo "Push de l'image Docker sur Docker Hub..."
-                script {
-                    docker.withRegistry('https://registry.hub.docker.com', env.DOCKERHUB_CREDENTIALS_ID) {
-                        dockerImage.push()
-                    }
+                withCredentials([usernamePassword(
+                    credentialsId: env.DOCKERHUB_CREDENTIALS_ID,
+                    usernameVariable: 'DOCKERHUB_USER',
+                    passwordVariable: 'DOCKERHUB_PASS'
+                )]) {
+                    sh '''
+                        echo "$DOCKERHUB_PASS" | docker login -u "$DOCKERHUB_USER" --password-stdin
+                        docker push $DOCKERHUB_REPO:$BUILD_NUMBER
+                    '''
                 }
             }
         }
@@ -59,10 +65,10 @@ pipeline {
 
     post {
         success {
-            echo 'Build réussi'
+            echo 'Build réussi 🎉'
         }
         failure {
-            echo 'Build échoué'
+            echo 'Build échoué ❌'
         }
     }
 }
