@@ -12,7 +12,7 @@ pipeline {
         GIT_URL                  = 'https://github.com/koussayAttia/student-management.git'
 
 
-        DOCKERHUB_REPO           = 'koussaybenttia/student-management'
+        DOCKERHUB_REPO           = 'koussaybenattia/student-management'
         DOCKERHUB_CREDENTIALS_ID = 'efb9d575-c792-451d-8397-39d6121e21ba'
     }
 
