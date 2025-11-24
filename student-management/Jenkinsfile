@@ -2,9 +2,9 @@ pipeline {
     agent any
 
     tools {
-        jdk 'JAVA_Home'
-        maven 'M2_HOME'
-    }
+    jdk 'JAVA_HOME'
+    maven 'M2_HOME'
+}
 
     environment {
         GIT_CREDENTIALS_ID       = '14409463'
