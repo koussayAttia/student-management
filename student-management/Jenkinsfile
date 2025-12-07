@@ -71,18 +71,18 @@ pipeline {
                 dir('student-management') {
                     sh '''
                         echo "Application des manifests Kubernetes..."
-
-                        # Démarrer Minikube seulement s'il n'est pas déjà démarré
+        
+                        # Démarrage de Minikube seulement si nécessaire
                         minikube status || minikube start --driver=docker --cpus=2 --memory=4096 --wait=all --wait-timeout=600s
-
+        
                         echo "Création du namespace devops s'il n'existe pas..."
                         minikube kubectl -- get namespace devops || minikube kubectl -- create namespace devops
-
+        
                         echo "Application des manifests Kubernetes..."
                         minikube kubectl -- apply -f mysql-deployment.yaml -n devops
                         minikube kubectl -- apply -f sonarqube-deployment.yaml -n devops
                         minikube kubectl -- apply -f spring-deployment.yaml -n devops
-
+        
                         echo "Vérification des pods..."
                         minikube kubectl -- get pods -n devops
                     '''
