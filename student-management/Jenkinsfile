@@ -2,15 +2,14 @@ pipeline {
     agent any
 
     tools {
-    jdk 'JAVA_HOME'
-    maven 'M2_HOME'
-}
+        jdk 'JAVA_HOME'
+        maven 'M2_HOME'
+    }
 
     environment {
         GIT_CREDENTIALS_ID       = '14409463'
         GIT_BRANCH               = 'main'
         GIT_URL                  = 'https://github.com/koussayAttia/student-management.git'
-
 
         DOCKERHUB_REPO           = 'koussaybenattia/student-management'
         DOCKERHUB_CREDENTIALS_ID = 'efb9d575-c792-451d-8397-39d6121e21ba'
@@ -61,6 +60,24 @@ pipeline {
 
                         echo "Push de l'image..."
                         docker push $DOCKERHUB_REPO:$BUILD_NUMBER
+                    '''
+                }
+            }
+        }
+
+        stage('Deploy to Kubernetes') {
+            steps {
+                echo "Déploiement sur Kubernetes (namespace devops)..."
+                dir('student-management') {
+                    sh '''
+                        echo "Application des manifests Kubernetes..."
+
+                        minikube kubectl -- apply -f mysql-deployment.yaml
+                        minikube kubectl -- apply -f sonarqube-deployment.yaml
+                        minikube kubectl -- apply -f spring-deployment.yaml
+
+                        echo "Vérification des pods..."
+                        minikube kubectl -- get pods -n devops
                     '''
                 }
             }
