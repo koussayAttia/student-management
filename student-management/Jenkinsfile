@@ -71,10 +71,11 @@ pipeline {
                 dir('student-management') {
                     sh '''
                         echo "Application des manifests Kubernetes..."
-
-                        minikube kubectl -- apply -f mysql-deployment.yaml
-                        minikube kubectl -- apply -f sonarqube-deployment.yaml
-                        minikube kubectl -- apply -f spring-deployment.yaml
+                        
+                        minikube start 
+                        minikube kubectl -- apply -f mysql-deployment.yaml -n devops
+                        minikube kubectl -- apply -f sonarqube-deployment.yaml -n devops
+                        minikube kubectl -- apply -f spring-deployment.yaml -n devops
 
                         echo "Vérification des pods..."
                         minikube kubectl -- get pods -n devops
