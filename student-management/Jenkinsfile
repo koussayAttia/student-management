@@ -65,24 +65,33 @@ pipeline {
             }
         }
 
-        stage('Deploy to Kubernetes') {
+                stage('Deploy to Kubernetes') {
             steps {
                 echo "Déploiement sur Kubernetes (namespace devops)..."
                 dir('student-management') {
                     sh '''
+                        set -eux
+
                         echo "Application des manifests Kubernetes..."
-        
-                        # Démarrage de Minikube seulement si nécessaire
-                        minikube status || minikube start --driver=docker --cpus=2 --memory=4096 --wait=all --wait-timeout=600s
-        
+
+                        echo "Suppression de l'ancien cluster Minikube s'il existe..."
+                        minikube delete || true
+
+                        echo "Démarrage d'un nouveau cluster Minikube..."
+                        minikube start --driver=docker --cpus=2 --memory=4096 --wait=all --wait-timeout=600s
+
+                        echo "Mise à jour du contexte kubeconfig..."
+                        minikube update-context
+
                         echo "Création du namespace devops s'il n'existe pas..."
                         minikube kubectl -- get namespace devops || minikube kubectl -- create namespace devops
-        
+
                         echo "Application des manifests Kubernetes..."
                         minikube kubectl -- apply -f mysql-deployment.yaml -n devops
                         minikube kubectl -- apply -f sonarqube-deployment.yaml -n devops
+                        minikube kubectl -- apply -f sonarqube-deployment.yaml -n devops
                         minikube kubectl -- apply -f spring-deployment.yaml -n devops
-        
+
                         echo "Vérification des pods..."
                         minikube kubectl -- get pods -n devops
                     '''
