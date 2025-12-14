@@ -13,13 +13,15 @@ pipeline {
 
         DOCKERHUB_REPO           = 'koussaybenattia/student-management'
         DOCKERHUB_CREDENTIALS_ID = 'efb9d575-c792-451d-8397-39d6121e21ba'
+
+        // 👇 mets ici ton URL NodePort SonarQube (exposé depuis Kubernetes)
+        SONAR_HOST_URL           = 'http://192.168.187.129:9000'
+        SONAR_TOKEN_CRED_ID      = '1233456789'  
     }
 
     stages {
-
         stage('Checkout') {
             steps {
-                echo "Récupération du projet depuis GitHub (dépôt privé)..."
                 git branch: env.GIT_BRANCH,
                     url: env.GIT_URL,
                     credentialsId: env.GIT_CREDENTIALS_ID
@@ -28,16 +30,30 @@ pipeline {
 
         stage('Build (clean & package, sans tests)') {
             steps {
-                echo "Build Maven avec skip des tests..."
                 dir('student-management') {
                     sh 'mvn clean package -DskipTests'
                 }
             }
         }
 
+        stage('SonarQube Analysis') {
+            steps {
+                dir('student-management') {
+                    withCredentials([string(credentialsId: env.SONAR_TOKEN_CRED_ID, variable: 'SONAR_TOKEN')]) {
+                        sh '''
+                          mvn sonar:sonar \
+                            -Dsonar.host.url=$SONAR_HOST_URL \
+                            -Dsonar.login=$SONAR_TOKEN \
+                            -Dsonar.projectKey=student-management \
+                            -Dsonar.projectName=student-management
+                        '''
+                    }
+                }
+            }
+        }
+
         stage('Build Docker Image') {
             steps {
-                echo "Build de l'image Docker..."
                 dir('student-management') {
                     sh 'docker build -t $DOCKERHUB_REPO:$BUILD_NUMBER .'
                 }
@@ -46,66 +62,35 @@ pipeline {
 
         stage('Push Docker Image to Docker Hub') {
             steps {
-                echo "Push de l'image Docker sur Docker Hub..."
-                withCredentials([
-                    usernamePassword(
-                        credentialsId: env.DOCKERHUB_CREDENTIALS_ID,
-                        usernameVariable: 'DOCKERHUB_USER',
-                        passwordVariable: 'DOCKERHUB_PASS'
-                    )
-                ]) {
+                withCredentials([usernamePassword(
+                    credentialsId: env.DOCKERHUB_CREDENTIALS_ID,
+                    usernameVariable: 'DOCKERHUB_USER',
+                    passwordVariable: 'DOCKERHUB_PASS'
+                )]) {
                     sh '''
-                        echo "Login à Docker Hub..."
                         echo "$DOCKERHUB_PASS" | docker login -u "$DOCKERHUB_USER" --password-stdin
-
-                        echo "Push de l'image..."
                         docker push $DOCKERHUB_REPO:$BUILD_NUMBER
                     '''
                 }
             }
         }
 
-                stage('Deploy to Kubernetes') {
+        stage('Deploy to Kubernetes') {
             steps {
-                echo "Déploiement sur Kubernetes (namespace devops)..."
                 dir('student-management') {
                     sh '''
                         set -eux
-
-                        echo "Application des manifests Kubernetes..."
-
-                        echo "Suppression de l'ancien cluster Minikube s'il existe..."
                         minikube delete || true
-
-                        echo "Démarrage d'un nouveau cluster Minikube..."
                         minikube start --driver=docker --cpus=2 --memory=4096 --wait=all --wait-timeout=600s
-
-                        echo "Mise à jour du contexte kubeconfig..."
                         minikube update-context
-
-                        echo "Création du namespace devops s'il n'existe pas..."
                         minikube kubectl -- get namespace devops || minikube kubectl -- create namespace devops
-
-                        echo "Application des manifests Kubernetes..."
                         minikube kubectl -- apply -f mysql-deployment.yaml -n devops
                         minikube kubectl -- apply -f sonarqube-deployment.yaml -n devops
-                        minikube kubectl -- apply -f sonarqube-deployment.yaml -n devops
                         minikube kubectl -- apply -f spring-deployment.yaml -n devops
-
-                        echo "Vérification des pods..."
                         minikube kubectl -- get pods -n devops
                     '''
                 }
             }
-        }
-    }
-
-    post {
-        success {
-            echo 'Build réussi 🎉'
-        }
-        failure {
-            echo 'Build échoué ❌'
         }
     }
 }
