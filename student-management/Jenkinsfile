@@ -16,7 +16,7 @@ pipeline {
 
         // 👇 mets ici ton URL NodePort SonarQube (exposé depuis Kubernetes)
         SONAR_HOST_URL           = 'http://192.168.187.129:9000'
-        SONAR_TOKEN_CRED_ID      = '1233456789'  
+        SONAR_TOKEN_CRED_ID      = '123456789'  
     }
 
     stages {
