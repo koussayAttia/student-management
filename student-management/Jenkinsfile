@@ -1,148 +1,134 @@
 pipeline {
-    agent any
+  agent any
 
-    tools {
-        jdk 'JAVA_HOME'
-        maven 'M2_HOME'
+  tools {
+    jdk 'JAVA_HOME'
+    maven 'M2_HOME'
+  }
+
+  environment {
+    GIT_CREDENTIALS_ID       = '14409463'
+    GIT_BRANCH               = 'main'
+    GIT_URL                  = 'https://github.com/koussayAttia/student-management.git'
+
+    DOCKERHUB_REPO           = 'koussaybenattia/student-management'
+    DOCKERHUB_CREDENTIALS_ID = 'efb9d575-c792-451d-8397-39d6121e21ba'
+
+    K8S_NAMESPACE            = 'devops'
+
+    // ⚠️ doit exister dans Jenkins Credentials (Secret text)
+    SONAR_TOKEN_CRED_ID      = 'sonarqube-token'
+
+    // ✅ ton Service Kubernetes réel
+    SONAR_SERVICE_NAME       = 'sonarqube-service'
+  }
+
+  stages {
+
+    stage('Checkout') {
+      steps {
+        git branch: env.GIT_BRANCH,
+            url: env.GIT_URL,
+            credentialsId: env.GIT_CREDENTIALS_ID
+      }
     }
 
-    environment {
-        GIT_CREDENTIALS_ID       = '14409463'
-        GIT_BRANCH               = 'main'
-        GIT_URL                  = 'https://github.com/koussayAttia/student-management.git'
-
-        DOCKERHUB_REPO           = 'koussaybenattia/student-management'
-        DOCKERHUB_CREDENTIALS_ID = 'efb9d575-c792-451d-8397-39d6121e21ba'
-
-        // ID du credential Jenkins (Kind: Secret text) qui contient le token SonarQube
-        SONAR_TOKEN_CRED_ID      = 'sonarqube-token'
-
-        // Namespace Kubernetes
-        K8S_NAMESPACE            = 'devops'
+    stage('Build (clean & package, sans tests)') {
+      steps {
+        dir('student-management') {
+          sh 'mvn clean package -DskipTests'
+        }
+      }
     }
 
-    stages {
+    stage('Start Minikube + Deploy SonarQube & MySQL') {
+      steps {
+        dir('student-management') {
+          sh '''
+            set -eux
 
-        stage('Checkout') {
-            steps {
-                echo "Checkout du projet..."
-                git branch: env.GIT_BRANCH,
-                    url: env.GIT_URL,
-                    credentialsId: env.GIT_CREDENTIALS_ID
-            }
+            minikube delete || true
+            minikube start --driver=docker --cpus=2 --memory=4096 --wait=all --wait-timeout=600s
+            minikube update-context
+
+            minikube kubectl -- get namespace ${K8S_NAMESPACE} || minikube kubectl -- create namespace ${K8S_NAMESPACE}
+
+            minikube kubectl -- apply -f mysql-deployment.yaml -n ${K8S_NAMESPACE}
+            minikube kubectl -- apply -f sonarqube-deployment.yaml -n ${K8S_NAMESPACE}
+
+            minikube kubectl -- -n ${K8S_NAMESPACE} wait --for=condition=ready pod -l app=sonarqube --timeout=600s
+
+            # ✅ récupère l’URL NodePort du bon service
+            SONAR_URL=$(minikube service -n ${K8S_NAMESPACE} ${SONAR_SERVICE_NAME} --url | head -n 1)
+            echo "SONAR_URL=$SONAR_URL" | tee sonar.env
+
+            minikube kubectl -- get svc -n ${K8S_NAMESPACE}
+            minikube kubectl -- get pods -n ${K8S_NAMESPACE}
+          '''
         }
-
-        stage('Build (clean & package, sans tests)') {
-            steps {
-                echo "Build Maven..."
-                dir('student-management') {
-                    sh 'mvn clean package -DskipTests'
-                }
-            }
-        }
-
-        stage('Start Minikube + Deploy SonarQube & MySQL') {
-            steps {
-                dir('student-management') {
-                    sh '''
-                        set -eux
-
-                        echo "Reset minikube..."
-                        minikube delete || true
-
-                        echo "Start minikube..."
-                        minikube start --driver=docker --cpus=2 --memory=4096 --wait=all --wait-timeout=600s
-                        minikube update-context
-
-                        echo "Namespace..."
-                        minikube kubectl -- get namespace ${K8S_NAMESPACE} || minikube kubectl -- create namespace ${K8S_NAMESPACE}
-
-                        echo "Deploy MySQL + SonarQube..."
-                        minikube kubectl -- apply -f mysql-deployment.yaml -n ${K8S_NAMESPACE}
-                        minikube kubectl -- apply -f sonarqube-deployment.yaml -n ${K8S_NAMESPACE}
-
-                        echo "Wait for SonarQube pod Ready..."
-                        minikube kubectl -- -n ${K8S_NAMESPACE} wait --for=condition=ready pod -l app=sonarqube --timeout=600s
-
-                        echo "Get SonarQube URL (NodePort)..."
-                        SONAR_URL=$(minikube service -n ${K8S_NAMESPACE} sonarqube --url | head -n 1)
-                        echo "SONAR_URL=$SONAR_URL" | tee sonar.env
-
-                        echo "Pods status:"
-                        minikube kubectl -- get pods -n ${K8S_NAMESPACE}
-                    '''
-                }
-            }
-        }
-
-        stage('SonarQube Analysis') {
-            steps {
-                echo "Analyse SonarQube..."
-                dir('student-management') {
-                    withCredentials([string(credentialsId: env.SONAR_TOKEN_CRED_ID, variable: 'SONAR_TOKEN')]) {
-                        sh '''
-                            set -eux
-                            source sonar.env
-
-                            mvn sonar:sonar \
-                              -Dsonar.host.url=$SONAR_URL \
-                              -Dsonar.login=$SONAR_TOKEN \
-                              -Dsonar.projectKey=student-management \
-                              -Dsonar.projectName=student-management
-                        '''
-                    }
-                }
-            }
-        }
-
-        stage('Build Docker Image') {
-            steps {
-                echo "Build Docker..."
-                dir('student-management') {
-                    sh 'docker build -t $DOCKERHUB_REPO:$BUILD_NUMBER .'
-                }
-            }
-        }
-
-        stage('Push Docker Image to Docker Hub') {
-            steps {
-                echo "Push Docker image..."
-                withCredentials([
-                    usernamePassword(
-                        credentialsId: env.DOCKERHUB_CREDENTIALS_ID,
-                        usernameVariable: 'DOCKERHUB_USER',
-                        passwordVariable: 'DOCKERHUB_PASS'
-                    )
-                ]) {
-                    sh '''
-                        set -eux
-                        echo "$DOCKERHUB_PASS" | docker login -u "$DOCKERHUB_USER" --password-stdin
-                        docker push $DOCKERHUB_REPO:$BUILD_NUMBER
-                    '''
-                }
-            }
-        }
-
-        stage('Deploy App to Kubernetes') {
-            steps {
-                echo "Deploy Spring app..."
-                dir('student-management') {
-                    sh '''
-                        set -eux
-
-                        echo "Deploy Spring..."
-                        minikube kubectl -- apply -f spring-deployment.yaml -n ${K8S_NAMESPACE}
-
-                        echo "Pods status:"
-                        minikube kubectl -- get pods -n ${K8S_NAMESPACE}
-                    '''
-                }
-            }
-        }
+      }
     }
 
-    post {
-        success { echo 'Build réussi 🎉' }
-        failure { echo 'Build échoué ❌' }
+    stage('SonarQube Analysis') {
+      steps {
+        dir('student-management') {
+          withCredentials([string(credentialsId: env.SONAR_TOKEN_CRED_ID, variable: 'SONAR_TOKEN')]) {
+            sh '''
+              set -eux
+              source sonar.env
+
+              test -n "$SONAR_URL"  # stop si vide
+
+              mvn sonar:sonar \
+                -Dsonar.host.url=$SONAR_URL \
+                -Dsonar.login=$SONAR_TOKEN \
+                -Dsonar.projectKey=student-management \
+                -Dsonar.projectName=student-management
+            '''
+          }
+        }
+      }
     }
+
+    stage('Build Docker Image') {
+      steps {
+        dir('student-management') {
+          sh 'docker build -t $DOCKERHUB_REPO:$BUILD_NUMBER .'
+        }
+      }
+    }
+
+    stage('Push Docker Image to Docker Hub') {
+      steps {
+        withCredentials([usernamePassword(
+          credentialsId: env.DOCKERHUB_CREDENTIALS_ID,
+          usernameVariable: 'DOCKERHUB_USER',
+          passwordVariable: 'DOCKERHUB_PASS'
+        )]) {
+          sh '''
+            set -eux
+            echo "$DOCKERHUB_PASS" | docker login -u "$DOCKERHUB_USER" --password-stdin
+            docker push $DOCKERHUB_REPO:$BUILD_NUMBER
+          '''
+        }
+      }
+    }
+
+    stage('Deploy App to Kubernetes') {
+      steps {
+        dir('student-management') {
+          sh '''
+            set -eux
+            minikube kubectl -- apply -f spring-deployment.yaml -n ${K8S_NAMESPACE}
+            minikube kubectl -- get pods -n ${K8S_NAMESPACE}
+          '''
+        }
+      }
+    }
+  }
+
+  post {
+    success { echo 'Build réussi 🎉' }
+    failure { echo 'Build échoué ❌' }
+  }
 }
