@@ -1,3 +1,15 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: sonarqube-data-pvc
+  namespace: devops
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -15,28 +27,16 @@ spec:
     spec:
       containers:
         - name: sonarqube
-          image: sonarqube:lts
+          image: sonarqube:latest
           ports:
             - containerPort: 9000
-          resources:
-            requests:
-              memory: "2Gi"
-              cpu: "1000m"
-            limits:
-              memory: "4Gi"
-              cpu: "2"
-          readinessProbe:
-            httpGet:
-              path: /about
-              port: 9000
-            initialDelaySeconds: 60   # temps d’attente avant le check
-            periodSeconds: 15         # fréquence de vérification
           volumeMounts:
             - name: sonarqube-data
               mountPath: /opt/sonarqube/data
       volumes:
         - name: sonarqube-data
-          emptyDir: {}   # ⚠️ à remplacer par un PVC si tu veux de la persistance
+          persistentVolumeClaim:
+            claimName: sonarqube-data-pvc
 ---
 apiVersion: v1
 kind: Service
@@ -44,11 +44,10 @@ metadata:
   name: sonarqube-service
   namespace: devops
 spec:
+  type: NodePort
   selector:
     app: sonarqube
   ports:
-    - protocol: TCP
-      port: 9000
+    - port: 9000
       targetPort: 9000
       nodePort: 32000
-  type: NodePort
