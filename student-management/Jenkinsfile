@@ -75,7 +75,7 @@ pipeline {
           withCredentials([string(credentialsId: '123456789', variable: 'SONAR_TOKEN')]) {
             sh '''
               set -eux
-              source sonar.env
+             . ./sonar.env
 
               test -n "$SONAR_URL"  # stop si vide
 
