@@ -7,14 +7,18 @@ pipeline {
   }
 
   environment {
-    GIT_BRANCH = 'main'
-    GIT_URL    = 'https://github.com/koussayAttia/student-management.git'
+    // ✅ Git
+    GIT_BRANCH          = 'main'
+    GIT_URL             = 'https://github.com/koussayAttia/student-management.git'
+    GIT_CREDENTIALS_ID  = '14409463'   // <<<<< IMPORTANT (repo privé)
 
+    // ✅ DockerHub
     DOCKERHUB_REPO           = 'koussaybenattia/student-management'
     DOCKERHUB_CREDENTIALS_ID = 'efb9d575-c792-451d-8397-39d6121e21ba'
 
+    // ✅ K8S / Sonar
     K8S_NAMESPACE       = 'devops'
-    SONAR_TOKEN_CRED_ID = 'sonarqube-token'
+    SONAR_TOKEN_CRED_ID = 'sonarqube-token'      // ID Jenkins Credentials (Secret text)
     SONAR_SERVICE_NAME  = 'sonarqube-service'
   }
 
@@ -23,7 +27,8 @@ pipeline {
     stage('Checkout') {
       steps {
         git branch: env.GIT_BRANCH,
-            url: env.GIT_URL
+            url: env.GIT_URL,
+            credentialsId: env.GIT_CREDENTIALS_ID
       }
     }
 
@@ -41,31 +46,35 @@ pipeline {
           sh '''#!/bin/bash
             set -euxo pipefail
 
-            # (Option) Si tu veux repartir à zéro à chaque build, garde delete.
-            # Sinon, commente la ligne suivante.
-            minikube delete || true
+            # ✅ Pour build RAPIDE: ne pas supprimer minikube à chaque fois
+            # (Décommente seulement si tu veux repartir à zéro)
+            # minikube delete || true
 
-            minikube start --driver=docker --cpus=2 --memory=4096 --wait=all --wait-timeout=600s
+            # ✅ Start minikube seulement si pas déjà running
+            minikube status >/dev/null 2>&1 || \
+              minikube start --driver=docker --cpus=2 --memory=4096 --wait=all --wait-timeout=600s
+
             minikube update-context
 
+            # Namespace
             minikube kubectl -- get namespace "${K8S_NAMESPACE}" >/dev/null 2>&1 || \
               minikube kubectl -- create namespace "${K8S_NAMESPACE}"
 
+            # Deploy
             minikube kubectl -- apply -f mysql-deployment.yaml -n "${K8S_NAMESPACE}"
             minikube kubectl -- apply -f sonarqube-deployment.yaml -n "${K8S_NAMESPACE}"
 
-            echo "Fix vm.max_map_count (needed by SonarQube/Elasticsearch)..."
+            # vm.max_map_count
             minikube ssh -- "sudo sysctl -w vm.max_map_count=262144" || true
 
-            echo "Waiting SonarQube pod Ready..."
+            # Wait pod Ready
             minikube kubectl -- -n "${K8S_NAMESPACE}" wait --for=condition=ready pod -l app=sonarqube --timeout=1200s
 
             # URL NodePort
             SONAR_URL="$(minikube service -n "${K8S_NAMESPACE}" "${SONAR_SERVICE_NAME}" --url | head -n 1)"
             echo "SONAR_URL=${SONAR_URL}" | tee sonar.env
 
-            # IMPORTANT: attendre SonarQube UP (évite l'erreur STARTING/HTML)
-            echo "Waiting SonarQube API status = UP ..."
+            # Wait SonarQube UP
             for i in $(seq 1 120); do
               if curl -s "${SONAR_URL}/api/system/status" | grep -q '"status":"UP"'; then
                 echo "✅ SonarQube is UP"
@@ -76,7 +85,6 @@ pipeline {
             done
             curl -s "${SONAR_URL}/api/system/status" | grep -q '"status":"UP"'
 
-            minikube kubectl -- get svc -n "${K8S_NAMESPACE}"
             minikube kubectl -- get pods -n "${K8S_NAMESPACE}"
           '''
         }
@@ -133,7 +141,7 @@ pipeline {
           sh '''#!/bin/bash
             set -euxo pipefail
             minikube kubectl -- apply -f spring-deployment.yaml -n "${K8S_NAMESPACE}"
-            minikube kubectl -- rollout status deployment/studentmang-app -n "${K8S_NAMESPACE}" --timeout=300s || true
+            minikube kubectl -- rollout status deployment/studentmang-app -n "${K8S_NAMESPACE}" --timeout=300s
             minikube kubectl -- get pods -n "${K8S_NAMESPACE}"
           '''
         }
