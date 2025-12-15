@@ -41,33 +41,45 @@ pipeline {
       }
     }
 
-    stage('Start Minikube + Deploy SonarQube & MySQL') {
-      steps {
-        dir('student-management') {
-          sh '''
-            set -eux
+  stage('Start Minikube + Deploy SonarQube & MySQL') {
+  steps {
+    dir('student-management') {
+      sh '''
+        set -eux
 
-            minikube delete || true
-            minikube start --driver=docker --cpus=2 --memory=4096 --wait=all --wait-timeout=600s
-            minikube update-context
+        minikube delete || true
+        minikube start --driver=docker --cpus=2 --memory=4096 --wait=all --wait-timeout=600s
+        minikube update-context
 
-            minikube kubectl -- get namespace ${K8S_NAMESPACE} || minikube kubectl -- create namespace ${K8S_NAMESPACE}
+        minikube kubectl -- get namespace ${K8S_NAMESPACE} || minikube kubectl -- create namespace ${K8S_NAMESPACE}
 
-            minikube kubectl -- apply -f mysql-deployment.yaml -n ${K8S_NAMESPACE}
-            minikube kubectl -- apply -f sonarqube-deployment.yaml -n ${K8S_NAMESPACE}
+        minikube kubectl -- apply -f mysql-deployment.yaml -n ${K8S_NAMESPACE}
+        minikube kubectl -- apply -f sonarqube-deployment.yaml -n ${K8S_NAMESPACE}
 
-            minikube kubectl -- -n ${K8S_NAMESPACE} wait --for=condition=ready pod -l app=sonarqube --timeout=600s
+        echo "Fix vm.max_map_count (needed by SonarQube/Elasticsearch)..."
+        minikube ssh -- "sudo sysctl -w vm.max_map_count=262144" || true
 
-            # ✅ récupère l’URL NodePort du bon service
-            SONAR_URL=$(minikube service -n ${K8S_NAMESPACE} ${SONAR_SERVICE_NAME} --url | head -n 1)
-            echo "SONAR_URL=$SONAR_URL" | tee sonar.env
+        echo "Waiting SonarQube to be Ready (max 20 min)..."
+        if ! minikube kubectl -- -n ${K8S_NAMESPACE} wait --for=condition=ready pod -l app=sonarqube --timeout=1200s; then
+          echo "❌ SonarQube not Ready. Debug:"
+          minikube kubectl -- -n ${K8S_NAMESPACE} get pods -o wide || true
+          minikube kubectl -- -n ${K8S_NAMESPACE} describe pod -l app=sonarqube || true
+          minikube kubectl -- -n ${K8S_NAMESPACE} logs -l app=sonarqube --tail=200 || true
+          minikube kubectl -- -n ${K8S_NAMESPACE} get events --sort-by=.metadata.creationTimestamp | tail -n 60 || true
+          exit 1
+        fi
 
-            minikube kubectl -- get svc -n ${K8S_NAMESPACE}
-            minikube kubectl -- get pods -n ${K8S_NAMESPACE}
-          '''
-        }
-      }
+        # ✅ récupère l’URL NodePort du bon service
+        SONAR_URL=$(minikube service -n ${K8S_NAMESPACE} ${SONAR_SERVICE_NAME} --url | head -n 1)
+        echo "SONAR_URL=$SONAR_URL" | tee sonar.env
+
+        minikube kubectl -- get svc -n ${K8S_NAMESPACE}
+        minikube kubectl -- get pods -n ${K8S_NAMESPACE}
+      '''
     }
+  }
+}
+
 
     stage('SonarQube Analysis') {
       steps {
