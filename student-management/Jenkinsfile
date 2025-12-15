@@ -35,37 +35,27 @@ pipeline {
     }
 
     stage('Deploy Infra (MySQL + SonarQube)') {
-  steps {
-    dir('student-management') {
-      sh '''
-        set -eux
-
-        # (optionnel) vérifier que minikube répond
-        minikube status
-
-        # namespace
-        kubectl get namespace devops || minikube kubectl -- create namespace devops
-
-        # déployer infra
-        kubectl apply -f mysql-deployment.yaml -n devops
-        kubectl apply -f sonarqube-deployment.yaml -n devops
-
-        # attendre SonarQube prêt
-        kubectl rollout status deployment/sonarqube -n devops --timeout=900s
-
-        # récupérer URL (ton service est sonarqube-service)
-        echo "SONAR_HOST_URL=$(kubectl service sonarqube-service -n devops --url | head -n 1)" > sonar_url.env
-      '''
-      script {
-        def props = readFile('sonar_url.env').trim()
-        env.SONAR_HOST_URL = props.split('=')[1]
-        echo "Using SONAR_HOST_URL=${env.SONAR_HOST_URL}"
+        steps {
+          dir('student-management') {
+            sh '''
+              set -eux
+      
+              kubectl get namespace devops || kubectl create namespace devops
+      
+              kubectl apply -f mysql-deployment.yaml -n devops
+              kubectl apply -f sonarqube-deployment.yaml -n devops
+      
+              kubectl rollout status deployment/sonarqube -n devops --timeout=900s
+      
+              SONAR_URL=$(minikube service sonarqube-service -n devops --url | head -n 1)
+              echo "SONAR_HOST_URL=$SONAR_URL" > sonar_url.env
+            '''
+            script {
+              env.SONAR_HOST_URL = readFile('sonar_url.env').trim().split('=')[1]
+            }
+          }
+        }
       }
-    }
-  }
-}
-
-
     stage('Build Docker Image') {
       steps {
         dir('student-management') {
