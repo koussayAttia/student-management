@@ -17,7 +17,7 @@ pipeline {
     K8S_NAMESPACE            = 'devops'
 
     // ⚠️ doit exister dans Jenkins Credentials (Secret text)
-    SONAR_TOKEN_CRED_ID      = 'sonarqube-token'
+    SONAR_TOKEN_CRED_ID      = '123456789'
 
     // ✅ ton Service Kubernetes réel
     SONAR_SERVICE_NAME       = 'sonarqube-service'
