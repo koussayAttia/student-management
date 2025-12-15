@@ -44,17 +44,17 @@ pipeline {
         minikube status
 
         # namespace
-        minikube kubectl -- get namespace devops || minikube kubectl -- create namespace devops
+        kubectl get namespace devops || minikube kubectl -- create namespace devops
 
         # déployer infra
-        minikube kubectl -- apply -f mysql-deployment.yaml -n devops
-        minikube kubectl -- apply -f sonarqube-deployment.yaml -n devops
+        kubectl apply -f mysql-deployment.yaml -n devops
+        kubectl apply -f sonarqube-deployment.yaml -n devops
 
         # attendre SonarQube prêt
-        minikube kubectl -- rollout status deployment/sonarqube -n devops --timeout=900s
+        kubectl rollout status deployment/sonarqube -n devops --timeout=900s
 
         # récupérer URL (ton service est sonarqube-service)
-        echo "SONAR_HOST_URL=$(minikube service sonarqube-service -n devops --url | head -n 1)" > sonar_url.env
+        echo "SONAR_HOST_URL=$(kubectl service sonarqube-service -n devops --url | head -n 1)" > sonar_url.env
       '''
       script {
         def props = readFile('sonar_url.env').trim()
