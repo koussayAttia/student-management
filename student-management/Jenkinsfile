@@ -82,25 +82,25 @@ pipeline {
 
 
     stage('SonarQube Analysis') {
-      steps {
-        dir('student-management') {
-          withCredentials([string(credentialsId: '123456789', variable: 'SONAR_TOKEN')]) {
-            sh '''
-              set -eux
-             . ./sonar.env
+  steps {
+    dir('student-management') {
+      withCredentials([string(credentialsId: env.SONAR_TOKEN_CRED_ID, variable: 'SONAR_TOKEN')]) {
+        sh '''
+          set -eux
+          . ./sonar.env
+          test -n "$SONAR_URL"
 
-              test -n "$SONAR_URL"  # stop si vide
-
-              mvn sonar:sonar \
-                -Dsonar.host.url=$SONAR_URL \
-                -Dsonar.login=$SONAR_TOKEN \
-                -Dsonar.projectKey=student-management \
-                -Dsonar.projectName=student-management
-            '''
-          }
-        }
+          mvn sonar:sonar \
+            -Dsonar.host.url=$SONAR_URL \
+            -Dsonar.login=$SONAR_TOKEN \
+            -Dsonar.projectKey=student-management \
+            -Dsonar.projectName=student-management
+        '''
       }
     }
+  }
+}
+
 
     stage('Build Docker Image') {
       steps {
