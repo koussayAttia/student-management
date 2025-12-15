@@ -26,12 +26,11 @@ pipeline {
   stages {
 
     stage('Checkout') {
-      steps {
-        git branch: env.GIT_BRANCH,
-            url: env.GIT_URL,
-            credentialsId: env.GIT_CREDENTIALS_ID
-      }
-    }
+  steps {
+    git branch: env.GIT_BRANCH,
+        url: env.GIT_URL
+  }
+}
 
     stage('Build (clean & package, sans tests)') {
       steps {
