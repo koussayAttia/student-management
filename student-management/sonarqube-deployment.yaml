@@ -27,12 +27,38 @@ spec:
     spec:
       containers:
         - name: sonarqube
-          image: sonarqube:latest
+          image: sonarqube:lts-community   # ✅ STABLE
           ports:
             - containerPort: 9000
+
+          resources:                      # ✅ OBLIGATOIRE
+            requests:
+              memory: "1Gi"
+              cpu: "500m"
+            limits:
+              memory: "2Gi"
+              cpu: "1"
+
+          readinessProbe:                 # ✅ POD READY
+            httpGet:
+              path: /api/system/status
+              port: 9000
+            initialDelaySeconds: 90
+            periodSeconds: 10
+            failureThreshold: 12
+
+          livenessProbe:                  # ✅ POD HEALTH
+            httpGet:
+              path: /api/system/status
+              port: 9000
+            initialDelaySeconds: 180
+            periodSeconds: 20
+            failureThreshold: 6
+
           volumeMounts:
             - name: sonarqube-data
               mountPath: /opt/sonarqube/data
+
       volumes:
         - name: sonarqube-data
           persistentVolumeClaim:
