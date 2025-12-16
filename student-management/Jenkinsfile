@@ -40,12 +40,12 @@ pipeline {
             sh '''
               set -eux
       
-              kubectl get namespace devops || kubectl create namespace devops
+              kubectl -- get namespace devops || kubectl -- create namespace devops
       
-              kubectl apply -f mysql-deployment.yaml -n devops
-              kubectl apply -f sonarqube-deployment.yaml -n devops
+              kubectl -- apply -f mysql-deployment.yaml -n devops
+              kubectl -- apply -f sonarqube-deployment.yaml -n devops
       
-              kubectl rollout status deployment/sonarqube -n devops --timeout=900s
+              kubectl -- rollout status deployment/sonarqube -n devops --timeout=900s
       
               SONAR_URL=$(minikube service sonarqube-service -n devops --url | head -n 1)
               echo "SONAR_HOST_URL=$SONAR_URL" > sonar_url.env
