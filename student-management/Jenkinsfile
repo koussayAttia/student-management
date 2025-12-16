@@ -14,9 +14,10 @@ pipeline {
     DOCKERHUB_REPO           = 'koussaybenattia/student-management'
     DOCKERHUB_CREDENTIALS_ID = 'efb9d575-c792-451d-8397-39d6121e21ba'
 
-    // Valeur par défaut (sera écrasée automatiquement après minikube service --url)
-    SONAR_HOST_URL           = 'http://localhost:9000'
-    SONAR_TOKEN_CRED_ID      = '123456789'
+    // sera remplacée après "minikube service ... --url"
+    SONAR_HOST_URL      = 'http://localhost:9000'
+    // ID Jenkins Credentials (String secret) contenant ton token Sonar
+    SONAR_TOKEN_CRED_ID = 'SonarQube_Pat'
   }
 
   stages {
@@ -35,27 +36,57 @@ pipeline {
     }
 
     stage('Deploy Infra (MySQL + SonarQube)') {
-        steps {
-          dir('student-management') {
-            sh '''
-              set -eux
-      
-              kubectl  get namespace devops || kubectl  create namespace devops
-      
-              kubectl  apply -f mysql-deployment.yaml -n devops
-              kubectl  apply -f sonarqube-deployment.yaml -n devops
-      
-              kubectl  rollout status deployment/sonarqube -n devops --timeout=900s
-      
-              SONAR_URL=$(minikube service sonarqube-service -n devops --url | head -n 1)
-              echo "SONAR_HOST_URL=$SONAR_URL" > sonar_url.env
-            '''
-            script {
-              env.SONAR_HOST_URL = readFile('sonar_url.env').trim().split('=')[1]
+      steps {
+        dir('student-management') {
+          sh '''
+            set -eux
+
+            minikube kubectl -- get namespace devops || minikube kubectl -- create namespace devops
+
+            minikube kubectl -- apply -f mysql-deployment.yaml -n devops
+            minikube kubectl -- apply -f sonarqube-deployment.yaml -n devops
+
+            minikube kubectl -- rollout status deployment/sonarqube -n devops --timeout=900s
+
+            SONAR_URL=$(minikube service sonarqube-service -n devops --url | head -n 1)
+            echo "SONAR_HOST_URL=$SONAR_URL" > sonar_url.env
+
+            # attendre que SonarQube soit UP
+            for i in $(seq 1 120); do
+              if curl -sf "$SONAR_URL/api/system/status" | grep -q '"status":"UP"'; then
+                echo "SonarQube is UP"
+                break
+              fi
+              echo "Waiting SonarQube..."
+              sleep 5
+            done
+          '''
+          script {
+            env.SONAR_HOST_URL = readFile('sonar_url.env').trim().split('=')[1]
+            echo "Using SONAR_HOST_URL=${env.SONAR_HOST_URL}"
+          }
+        }
+      }
+    }
+
+    stage('SonarQube Analysis') {
+      steps {
+        dir('student-management') {
+          withCredentials([string(credentialsId: env.SONAR_TOKEN_CRED_ID, variable: 'SONAR_TOKEN')]) {
+            withSonarQubeEnv('SonarQube') {
+              sh '''
+                mvn sonar:sonar \
+                  -Dsonar.projectKey=student-management \
+                  -Dsonar.projectName=student-management \
+                  -Dsonar.host.url=$SONAR_HOST_URL \
+                  -Dsonar.login=$SONAR_TOKEN
+              '''
             }
           }
         }
       }
+    }
+
     stage('Build Docker Image') {
       steps {
         dir('student-management') {
@@ -84,7 +115,6 @@ pipeline {
         dir('student-management') {
           sh '''
             set -eux
-            # NE PAS delete/start minikube ici !
             minikube kubectl -- apply -f spring-deployment.yaml -n devops
             minikube kubectl -- get pods -n devops
           '''
